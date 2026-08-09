@@ -1,0 +1,261 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
+
+  <title>Free Oracle Cloud Instance (OCI)</title>
+
+  <meta name="description"
+        content="Free Oracle Cloud Instance - 개인 공부, 논문 실험, 아이디어 테스트 및 AX 실험 공간">
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+    }
+
+    body {
+      min-height: 100vh;
+
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        "Noto Sans KR",
+        Arial,
+        sans-serif;
+
+      color: #333333;
+    }
+
+    /* =========================
+       Main
+       ========================= */
+
+    .page {
+      width: 100%;
+
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      padding: 35px 20px 15px;
+
+      background: transparent;
+    }
+
+    /*
+      기존 크기에서 약 15% 축소
+
+      이전:
+      max-width: 1500px;
+      width: 100%;
+
+      현재:
+      width: 85%;
+      max-width: 1275px;
+    */
+    .hero {
+      width: 85%;
+      max-width: 1275px;
+
+      margin: 0 auto;
+
+      background: transparent;
+      border: none;
+      box-shadow: none;
+    }
+
+    .hero img {
+      display: block;
+
+      width: 100%;
+      height: auto;
+
+      margin: 0 auto;
+
+      border: none;
+      outline: none;
+
+      border-radius: 18px;
+
+      /*
+        이미지 자체에만
+        아주 약한 그림자 적용
+      */
+      box-shadow:
+        0 5px 18px rgba(0, 0, 0, 0.08);
+
+      transition:
+        transform 0.25s ease,
+        box-shadow 0.25s ease;
+    }
+
+    .hero img:hover {
+      transform: translateY(-2px);
+
+      box-shadow:
+        0 8px 22px rgba(0, 0, 0, 0.10);
+    }
+
+    /* =========================
+       Footer
+       ========================= */
+
+    footer {
+      width: 100%;
+
+      text-align: center;
+
+      padding:
+        8px
+        20px
+        25px;
+
+      color: #777777;
+
+      font-size: 13px;
+      line-height: 1.8;
+
+      background: transparent;
+      border: none;
+    }
+
+    footer a {
+      color: #245b85;
+
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    footer a:hover {
+      color: #d94b2b;
+      text-decoration: underline;
+    }
+
+    .divider {
+      margin: 0 12px;
+      color: #cccccc;
+    }
+
+    .copyright {
+      margin-top: 3px;
+
+      color: #aaaaaa;
+      font-size: 11px;
+    }
+
+    /* =========================
+       Tablet
+       ========================= */
+
+    @media (max-width: 1200px) {
+
+      .hero {
+        width: 90%;
+      }
+
+    }
+
+    /* =========================
+       Mobile
+       ========================= */
+
+    @media (max-width: 768px) {
+
+      .page {
+        padding:
+          15px
+          8px
+          8px;
+      }
+
+      .hero {
+        width: 96%;
+      }
+
+      .hero img {
+        border-radius: 12px;
+
+        box-shadow:
+          0 3px 12px rgba(0, 0, 0, 0.07);
+      }
+
+      footer {
+        padding:
+          8px
+          10px
+          18px;
+
+        font-size: 12px;
+      }
+
+      .divider {
+        display: none;
+      }
+
+      footer a {
+        display: block;
+        margin: 2px 0;
+      }
+
+    }
+  </style>
+</head>
+
+
+<body>
+
+  <main class="page">
+
+    <section class="hero">
+
+      <img
+        src="main.png"
+        alt="Free Oracle Cloud Instance OCI Personal Cloud Lab">
+
+    </section>
+
+  </main>
+
+
+  <footer>
+
+    <div>
+
+      문의사항 :
+      <a href="mailto:leemgs@gmail.com">
+        leemgs@gmail.com
+      </a>
+
+      <span class="divider">|</span>
+
+      주인장 개인 홈페이지 :
+      <a
+        href="https://leemgs.github.io"
+        target="_blank"
+        rel="noopener noreferrer">
+        leemgs.github.io
+      </a>
+
+    </div>
+
+    <div class="copyright">
+      Free Oracle Cloud Instance (OCI)
+      · Personal Cloud Lab
+    </div>
+
+  </footer>
+
+</body>
+</html>
