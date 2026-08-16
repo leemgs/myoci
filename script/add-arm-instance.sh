@@ -11,8 +11,8 @@ DISPLAY_NAME="free-arm-01"
 SHAPE="VM.Standard.A1.Flex"
 OCPUS=1
 MEM_GB=6
-LOG_FILE="/etc/script/add-arm-instance.log"
-LOCK_FILE="/etc/script/add-arm-instance.done"
+LOG_FILE="/var/www/html/myoci/script/add-arm-instance.log"
+LOCK_FILE="/var/www/html/myoci/script/add-arm-instance.done"
 EMAIL_TO="leemgs@gmail.com"
 MAILRC_FILE="/home/ubuntu/.mailrc"
 
