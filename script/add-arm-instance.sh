@@ -11,14 +11,49 @@ DISPLAY_NAME="free-arm-01"
 SHAPE="VM.Standard.A1.Flex"
 OCPUS=1
 MEM_GB=6
-LOG_FILE="/etc/script/add-arm-instance.log"
-LOCK_FILE="/etc/script/add-arm-instance.done"
+LOG_FILE="/var/www/html/myoci/script/add-arm-instance.log"
+LOCK_FILE="/var/www/html/myoci/script/add-arm-instance.done"
+EMAIL_TO="leemgs@gmail.com"
+MAILRC_FILE="/home/ubuntu/.mailrc"
 
 export PATH="/home/ubuntu/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 export OCI_CLI_CONFIG_FILE="/home/ubuntu/.oci/config"
 
 # 화면+로그 동시 출력 함수
 log() { echo "$(date) - $*" | tee -a "$LOG_FILE"; }
+
+# s-nail(mail)과 MAILRC_FILE에 설정된 SMTP 계정으로 성공 알림 전송
+send_success_email() {
+  local instance_id="$1"
+  local subject="[OCI] ARM 인스턴스 생성 성공: $DISPLAY_NAME"
+
+  if ! command -v mail >/dev/null 2>&1; then
+    log "⚠️ 성공 이메일 전송 실패: mail 명령을 찾을 수 없음"
+    return 1
+  fi
+
+  if [ ! -r "$MAILRC_FILE" ]; then
+    log "⚠️ 성공 이메일 전송 실패: $MAILRC_FILE 파일을 읽을 수 없음"
+    return 1
+  fi
+
+  if printf '%s\n' \
+    "OCI ARM 인스턴스 생성이 성공했습니다." \
+    "" \
+    "이름: $DISPLAY_NAME" \
+    "인스턴스 ID: $instance_id" \
+    "Shape: $SHAPE" \
+    "OCPU: $OCPUS" \
+    "Memory(GB): $MEM_GB" \
+    "Availability Domain: $AD" \
+    "생성 시각: $(date)" \
+    | MAILRC="$MAILRC_FILE" mail -s "$subject" "$EMAIL_TO"; then
+    log "성공 이메일 전송 완료: $EMAIL_TO"
+  else
+    log "⚠️ 성공 이메일 전송 실패: $EMAIL_TO"
+    return 1
+  fi
+}
 
 # 이미 성공했으면 즉시 종료
 if [ -f "$LOCK_FILE" ]; then
@@ -41,10 +76,12 @@ RESULT=$(oci compute instance launch \
   2>&1)
 
 if echo "$RESULT" | grep -q '"id"'; then
+  INSTANCE_ID=$(echo "$RESULT" | sed -n 's/^[[:space:]]*"id":[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
   log "🎉 성공! 인스턴스 생성됨"
   echo "$RESULT" | grep '"id"' | head -1 | tee -a "$LOG_FILE"
   touch "$LOCK_FILE"
   log "lock 생성. 더 이상 시도 안 함."
+  send_success_email "${INSTANCE_ID:-확인 불가}"
 elif echo "$RESULT" | grep -qi "Out of capacity\|Out of host capacity"; then
   log "용량 부족. 다음 주기에 재시도."
 elif echo "$RESULT" | grep -qi "TooManyRequests"; then
