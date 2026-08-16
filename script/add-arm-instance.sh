@@ -22,35 +22,52 @@ export OCI_CLI_CONFIG_FILE="/home/ubuntu/.oci/config"
 # 화면+로그 동시 출력 함수
 log() { echo "$(date) - $*" | tee -a "$LOG_FILE"; }
 
-# s-nail(mail)과 MAILRC_FILE에 설정된 SMTP 계정으로 성공 알림 전송
+# s-nail(mail)과 MAILRC_FILE에 설정된 Gmail SMTP 계정으로 성공 알림 전송
+#
+# 사전 준비(최초 1회):
+#   sudo apt install s-nail
+#   sudo ln -s /usr/bin/s-nail /usr/bin/mail
+#   ~/.mailrc 에 Gmail SMTP(STARTTLS, 587, 앱 비밀번호) 설정 작성
 send_success_email() {
   local instance_id="$1"
   local subject="[OCI] ARM 인스턴스 생성 성공: $DISPLAY_NAME"
+  local mail_verbose_log="${LOG_FILE}.mail.log"
 
+  # mail(s-nail) 미설치 시 설치 방법 안내
   if ! command -v mail >/dev/null 2>&1; then
-    log "⚠️ 성공 이메일 전송 실패: mail 명령을 찾을 수 없음"
+    log "⚠️ 성공 이메일 전송 실패: mail(s-nail) 명령 없음. 설치: 'sudo apt install s-nail && sudo ln -s /usr/bin/s-nail /usr/bin/mail'"
     return 1
   fi
 
+  # SMTP 설정(~/.mailrc) 확인
   if [ ! -r "$MAILRC_FILE" ]; then
-    log "⚠️ 성공 이메일 전송 실패: $MAILRC_FILE 파일을 읽을 수 없음"
+    log "⚠️ 성공 이메일 전송 실패: SMTP 설정 파일 $MAILRC_FILE 을(를) 읽을 수 없음"
     return 1
   fi
 
-  if printf '%s\n' \
-    "OCI ARM 인스턴스 생성이 성공했습니다." \
+  # 메일 본문 구성
+  local body
+  body=$(printf '%s\n' \
+    "OCI ARM 인스턴스 생성이 성공했습니다. 🎉" \
     "" \
-    "이름: $DISPLAY_NAME" \
-    "인스턴스 ID: $instance_id" \
-    "Shape: $SHAPE" \
-    "OCPU: $OCPUS" \
-    "Memory(GB): $MEM_GB" \
+    "이름               : $DISPLAY_NAME" \
+    "인스턴스 ID        : $instance_id" \
+    "Shape              : $SHAPE" \
+    "OCPU               : $OCPUS" \
+    "Memory(GB)         : $MEM_GB" \
     "Availability Domain: $AD" \
-    "생성 시각: $(date)" \
-    | MAILRC="$MAILRC_FILE" mail -s "$subject" "$EMAIL_TO"; then
-    log "성공 이메일 전송 완료: $EMAIL_TO"
+    "생성 시각          : $(date)" \
+    "" \
+    "상세 로그는 첨부한 $(basename "$LOG_FILE") 파일을 참고하세요.")
+
+  # ~/.mailrc 의 Gmail SMTP 계정으로 전송 (-v 상세, -a 로그 첨부)
+  # 상세 SMTP 로그는 첨부 파일 훼손을 막기 위해 별도 파일에 기록
+  if printf '%s\n' "$body" \
+      | MAILRC="$MAILRC_FILE" mail -v -s "$subject" -a "$LOG_FILE" "$EMAIL_TO" \
+        >"$mail_verbose_log" 2>&1; then
+    log "성공 이메일 전송 완료: $EMAIL_TO (SMTP 상세 로그: $mail_verbose_log)"
   else
-    log "⚠️ 성공 이메일 전송 실패: $EMAIL_TO"
+    log "⚠️ 성공 이메일 전송 실패: $EMAIL_TO. SMTP 설정/앱 비밀번호 확인 필요 (상세: $mail_verbose_log)"
     return 1
   fi
 }
