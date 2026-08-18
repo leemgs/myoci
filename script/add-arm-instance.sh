@@ -118,6 +118,27 @@ send_success_email() {
   fi
 }
 
+# 인스턴스 생성 여부와 관계없이 현재 OCI 상태를 웹 표시용 JSON으로 갱신한다.
+# 이미 성공 lock이 존재해도 cron 실행 때마다 최신 상태를 반영한다.
+refresh_instance_info() {
+  local updater="$(dirname "$0")/update-instance-info.sh"
+
+  if [ ! -x "$updater" ]; then
+    log "⚠️ 웹 인스턴스 정보 갱신 실패: 실행 가능한 $updater 파일이 없음"
+    return 1
+  fi
+
+  if "$updater" >>"$LOG_FILE" 2>&1; then
+    return 0
+  fi
+
+  log "⚠️ 웹 인스턴스 정보 갱신 실패. $updater 또는 /etc/environment를 확인하세요."
+  return 1
+}
+
+# add-arm-instance.sh가 기존 cron에 이미 등록되어 있으면 별도 cron 없이도 갱신된다.
+refresh_instance_info
+
 # 이미 성공했으면 즉시 종료
 if [ -f "$LOCK_FILE" ]; then
   log "이미 성공(lock 존재). 종료."
@@ -168,9 +189,6 @@ for FD in "${FAULT_DOMAINS[@]}"; do
     reset_backoff
     log "lock 생성. 더 이상 시도 안 함."
     send_success_email "${INSTANCE_ID:-확인 불가}"
-    if ! "$(dirname "$0")/update-instance-info.sh" >>"$LOG_FILE" 2>&1; then
-      log "⚠️ 웹 인스턴스 정보 갱신 실패. update-instance-info.sh를 확인하세요."
-    fi
     launched=1
     break
 

@@ -129,6 +129,19 @@ sudo chmod +x /var/www/html/myoci/script/update-instance-info.sh
 /var/www/html/myoci/script/update-instance-info.sh
 ```
 
+설정이나 코드를 배포한 직후에는 위 명령을 **한 번 직접 실행해야** 웹 오류
+메시지가 사라집니다. 성공 시 아래 파일이 생성되어야 합니다.
+
+```bash
+ls -l /var/www/html/myoci/docs/instance-info.json
+python3 -m json.tool /var/www/html/myoci/docs/instance-info.json
+```
+
+`add-arm-instance.sh`는 실행을 시작할 때마다 이 갱신 스크립트를 호출합니다.
+따라서 기존 ARM 생성 cron이 동작 중이면 성공 lock이 이미 있어도 웹 정보는
+계속 갱신됩니다. OCI CLI가 `/home/ubuntu/bin/oci`에 설치된 경우도 cron에서
+찾을 수 있도록 갱신 스크립트가 해당 경로를 PATH에 자동으로 추가합니다.
+
 인스턴스 상태를 주기적으로 갱신하려면 `crontab -e`에 다음 항목을 등록합니다.
 
 ```cron
@@ -137,6 +150,39 @@ sudo chmod +x /var/www/html/myoci/script/update-instance-info.sh
 
 웹 서버 프로세스가 `docs/instance-info.json`을 읽을 수 있어야 하고, 스크립트를
 실행하는 사용자는 `docs/` 디렉터리에 파일을 생성할 권한이 있어야 합니다.
+
+### 웹에 "OCI 정보 파일을 확인할 수 없습니다"가 표시될 때
+
+이 메시지는 브라우저가 `docs/instance-info.json`을 읽지 못했다는 뜻입니다.
+서버에서 다음 순서로 원인을 확인합니다.
+
+```bash
+cd /var/www/html/myoci
+
+# 1. OCI CLI와 환경변수 확인
+command -v oci
+sudo grep -E '^OCI_(CLI_CONFIG_FILE|CLI_PROFILE|REGION|COMPARTMENT_ID|INSTANCE_INFO_FILE)=' /etc/environment
+
+# 2. 갱신 스크립트를 ubuntu 사용자로 실행
+sudo -u ubuntu ./script/update-instance-info.sh
+
+# 3. 파일 및 웹 응답 확인
+ls -l docs/instance-info.json
+curl -fsS https://myoci.mooo.com/myoci/docs/instance-info.json | python3 -m json.tool
+```
+
+2번 명령이 권한 오류를 출력하면 `ubuntu` 사용자가 `docs/`에 쓸 수 있게 합니다.
+
+```bash
+sudo chown -R ubuntu:www-data /var/www/html/myoci
+sudo find /var/www/html/myoci -type d -exec chmod 755 {} \;
+sudo chmod 755 /var/www/html/myoci/script/*.sh
+```
+
+OCI 인증 오류가 나오면 `/home/ubuntu/.oci/config`와 그 파일의 `key_file`에 적힌
+개인 키를 `ubuntu` 사용자가 읽을 수 있는지 확인합니다. JSON 파일을 생성한 뒤
+웹 URL이 404라면 웹 서버의 `/myoci/` 경로가 실제
+`/var/www/html/myoci/`를 가리키는지도 확인합니다.
 
 ## 확보 가능성 통계
 

@@ -16,6 +16,9 @@ set -a
 . "$ENV_FILE"
 set +a
 
+# cron의 기본 PATH 또는 /etc/environment의 PATH에 OCI 설치 경로가 없을 수 있다.
+export PATH="/home/ubuntu/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+
 : "${OCI_COMPARTMENT_ID:?/etc/environment에 OCI_COMPARTMENT_ID를 설정하세요.}"
 : "${OCI_REGION:?/etc/environment에 OCI_REGION을 설정하세요.}"
 
