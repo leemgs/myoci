@@ -119,8 +119,8 @@ rm -f script/data/add-arm-instance.state
 - `docs/oci_status.html` — Oracle Instance Status
 - `docs/about_oci.html` — About OCI
 
-Home의 `main.gif`는 약 8초 주기로 천천히 반복되어 오두막 창문의 불빛이
-자연스럽게 꺼졌다가 다시 켜집니다.
+Home의 `main.gif`는 약 8초 주기로 천천히 반복되며, 오두막 창문 영역의 밝기가
+약 30%까지 어두워졌다가 다시 완전히 켜지도록 구성되어 있습니다.
 
 OCI CLI를 실행할 서버에서 다음 변수를 `/etc/environment`에 추가합니다. 실제
 compartment OCID와 서버 경로에 맞게 값을 변경하세요.
