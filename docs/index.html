@@ -38,6 +38,58 @@
       color: #333333;
     }
 
+    [hidden] {
+      display: none !important;
+    }
+
+    /* =========================
+       Header Navigation
+       ========================= */
+
+    .site-header {
+      width: 85%;
+      max-width: 1275px;
+      margin: 0 auto;
+      padding-top: 22px;
+    }
+
+    .site-nav {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .nav-button {
+      padding: 9px 14px;
+      color: #64748b;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 9px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .nav-button:hover {
+      color: #245b85;
+      background: #f8fafc;
+    }
+
+    .nav-button.active {
+      color: #ffffff;
+      background: #245b85;
+      border-color: #245b85;
+    }
+
+    .nav-button:focus-visible,
+    .refresh-button:focus-visible {
+      outline: 3px solid rgba(36, 91, 133, 0.25);
+      outline-offset: 2px;
+    }
+
     /* =========================
        Main
        ========================= */
@@ -50,7 +102,7 @@
       justify-content: center;
       align-items: center;
 
-      padding: 35px 20px 15px;
+      padding: 18px 20px 15px;
 
       background: transparent;
     }
@@ -289,6 +341,10 @@
         width: 90%;
       }
 
+      .site-header {
+        width: 90%;
+      }
+
       .instance-panel {
         width: 90%;
       }
@@ -306,6 +362,20 @@
           15px
           8px
           8px;
+      }
+
+      .site-header {
+        width: 96%;
+        padding-top: 12px;
+      }
+
+      .site-nav {
+        justify-content: center;
+      }
+
+      .nav-button {
+        flex: 1;
+        text-align: center;
       }
 
       .hero {
@@ -360,9 +430,34 @@
 
 <body>
 
+  <header class="site-header">
+    <nav class="site-nav" aria-label="주요 메뉴" role="tablist">
+      <button
+        id="home-tab"
+        class="nav-button active"
+        type="button"
+        role="tab"
+        data-view-target="home"
+        aria-controls="home-view"
+        aria-selected="true">
+        Home
+      </button>
+      <button
+        id="instance-tab"
+        class="nav-button"
+        type="button"
+        role="tab"
+        data-view-target="instances"
+        aria-controls="instance-view"
+        aria-selected="false">
+        Oracle Instance Status
+      </button>
+    </nav>
+  </header>
+
   <main class="page">
 
-    <section class="hero">
+    <section class="hero" id="home-view" role="tabpanel" aria-labelledby="home-tab">
     <a href="https://cloud.oracle.com/compute/instances?region=ap-tokyo-1">
       <img
         src="main.gif"
@@ -370,7 +465,12 @@
     </a>
     </section>
 
-    <section class="instance-panel" aria-labelledby="instance-heading">
+    <section
+      class="instance-panel"
+      id="instance-view"
+      role="tabpanel"
+      aria-labelledby="instance-tab instance-heading"
+      hidden>
       <div class="instance-header">
         <div>
           <h2 id="instance-heading">Oracle 인스턴스 현황</h2>
@@ -418,6 +518,10 @@
     const instanceList = document.getElementById("instance-list");
     const instanceMeta = document.getElementById("instance-meta");
     const refreshButton = document.getElementById("refresh-instances");
+    const homeView = document.getElementById("home-view");
+    const instanceView = document.getElementById("instance-view");
+    const viewButtons = document.querySelectorAll("[data-view-target]");
+    let instancesLoaded = false;
 
     function detailRow(container, label, value) {
       const term = document.createElement("dt");
@@ -494,12 +598,41 @@
         console.error("OCI instance information error:", error);
       } finally {
         refreshButton.disabled = false;
+        instancesLoaded = true;
       }
     }
 
+    function showView(viewName, updateAddress = true) {
+      const showInstances = viewName === "instances";
+      homeView.hidden = showInstances;
+      instanceView.hidden = !showInstances;
+
+      viewButtons.forEach((button) => {
+        const active = button.dataset.viewTarget === viewName;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", String(active));
+      });
+
+      if (updateAddress) {
+        const address = showInstances
+          ? `${window.location.pathname}${window.location.search}#oracle-instance-status`
+          : `${window.location.pathname}${window.location.search}`;
+        window.history.replaceState(null, "", address);
+      }
+
+      if (showInstances && !instancesLoaded) loadInstances();
+    }
+
     refreshButton.addEventListener("click", loadInstances);
-    loadInstances();
-    window.setInterval(loadInstances, 120000);
+    viewButtons.forEach((button) => {
+      button.addEventListener("click", () => showView(button.dataset.viewTarget));
+    });
+
+    const initialView = window.location.hash === "#oracle-instance-status" ? "instances" : "home";
+    showView(initialView, false);
+    window.setInterval(() => {
+      if (!instanceView.hidden) loadInstances();
+    }, 120000);
   </script>
 
 </body>

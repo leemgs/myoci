@@ -106,6 +106,8 @@ rm -f script/data/add-arm-instance.state
 불러온 뒤 `oci compute instance list`를 실행합니다. 조회 결과는 공개해도 되는
 필드만 `docs/instance-info.json`에 저장되며, 웹 페이지가 이 파일을 읽어 인스턴스
 이름, 상태, Shape, OCPU, 메모리, AD와 생성 시각을 표시합니다.
+페이지를 처음 열면 `Home` 메뉴가 선택되어 메인 이미지를 표시하고, 우측 상단의
+`Oracle Instance Status` 메뉴를 선택하면 OCI 인스턴스 현황 화면으로 전환됩니다.
 
 OCI CLI를 실행할 서버에서 다음 변수를 `/etc/environment`에 추가합니다. 실제
 compartment OCID와 서버 경로에 맞게 값을 변경하세요.
