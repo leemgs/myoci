@@ -111,6 +111,17 @@ rm -f script/data/add-arm-instance.state
 `About OCI` 메뉴에서는 Always Free 제공 자원, SSH·네트워크 기본 사항, 주요
 무료 서비스, 장단점과 Oracle 공식 참고 링크를 확인할 수 있습니다.
 
+각 화면은 아래 주소로 직접 접속할 수 있습니다. 메뉴를 클릭할 때는 페이지를
+다시 내려받지 않고 화면과 주소만 전환하며, 직접 URL로 접속하면 해당 화면으로
+자동 이동합니다.
+
+- `docs/home.html` — Home
+- `docs/oci_status.html` — Oracle Instance Status
+- `docs/about_oci.html` — About OCI
+
+Home의 `main.gif`는 약 8초 주기로 천천히 반복되어 오두막 창문의 불빛이
+자연스럽게 꺼졌다가 다시 켜집니다.
+
 OCI CLI를 실행할 서버에서 다음 변수를 `/etc/environment`에 추가합니다. 실제
 compartment OCID와 서버 경로에 맞게 값을 변경하세요.
 

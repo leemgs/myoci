@@ -61,6 +61,9 @@
     }
 
     .nav-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       padding: 9px 14px;
       color: #64748b;
       background: transparent;
@@ -70,6 +73,7 @@
       font: inherit;
       font-size: 14px;
       font-weight: 600;
+      text-decoration: none;
       transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
     }
 
@@ -564,36 +568,36 @@
 
   <header class="site-header">
     <nav class="site-nav" aria-label="주요 메뉴" role="tablist">
-      <button
+      <a
         id="home-tab"
         class="nav-button active"
-        type="button"
         role="tab"
+        href="home.html"
         data-view-target="home"
         aria-controls="home-view"
         aria-selected="true">
         Home
-      </button>
-      <button
+      </a>
+      <a
         id="instance-tab"
         class="nav-button"
-        type="button"
         role="tab"
+        href="oci_status.html"
         data-view-target="instances"
         aria-controls="instance-view"
         aria-selected="false">
         Oracle Instance Status
-      </button>
-      <button
+      </a>
+      <a
         id="about-tab"
         class="nav-button"
-        type="button"
         role="tab"
+        href="about_oci.html"
         data-view-target="about"
         aria-controls="about-view"
         aria-selected="false">
         About OCI
-      </button>
+      </a>
     </nav>
   </header>
 
@@ -602,7 +606,7 @@
     <section class="hero" id="home-view" role="tabpanel" aria-labelledby="home-tab">
     <a href="https://cloud.oracle.com/compute/instances?region=ap-tokyo-1">
       <img
-        src="main.gif"
+        src="main.gif?v=2"
         alt="Free OCI based Personal Cloud Lab">
     </a>
     </section>
@@ -855,9 +859,8 @@
       });
 
       if (updateAddress) {
-        const hash = showInstances ? "#oracle-instance-status" : showAbout ? "#about-oci" : "";
-        const address = `${window.location.pathname}${window.location.search}${hash}`;
-        window.history.replaceState(null, "", address);
+        const page = showInstances ? "oci_status.html" : showAbout ? "about_oci.html" : "home.html";
+        window.history.pushState({ view: viewName }, "", page);
       }
 
       if (showInstances && !instancesLoaded) loadInstances();
@@ -865,15 +868,22 @@
 
     refreshButton.addEventListener("click", loadInstances);
     viewButtons.forEach((button) => {
-      button.addEventListener("click", () => showView(button.dataset.viewTarget));
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        showView(button.dataset.viewTarget);
+      });
     });
 
-    const initialView = window.location.hash === "#oracle-instance-status"
-      ? "instances"
-      : window.location.hash === "#about-oci"
-        ? "about"
-        : "home";
+    function viewFromLocation() {
+      const page = window.location.pathname.split("/").pop();
+      if (page === "oci_status.html" || window.location.hash === "#oracle-instance-status") return "instances";
+      if (page === "about_oci.html" || window.location.hash === "#about-oci") return "about";
+      return "home";
+    }
+
+    const initialView = viewFromLocation();
     showView(initialView, false);
+    window.addEventListener("popstate", () => showView(viewFromLocation(), false));
     window.setInterval(() => {
       if (!instanceView.hidden) loadInstances();
     }, 120000);
