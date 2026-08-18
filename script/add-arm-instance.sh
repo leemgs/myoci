@@ -168,6 +168,9 @@ for FD in "${FAULT_DOMAINS[@]}"; do
     reset_backoff
     log "lock 생성. 더 이상 시도 안 함."
     send_success_email "${INSTANCE_ID:-확인 불가}"
+    if ! "$(dirname "$0")/update-instance-info.sh" >>"$LOG_FILE" 2>&1; then
+      log "⚠️ 웹 인스턴스 정보 갱신 실패. update-instance-info.sh를 확인하세요."
+    fi
     launched=1
     break
 

@@ -46,6 +46,7 @@
       width: 100%;
 
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
 
@@ -109,6 +110,129 @@
     }
 
     /* =========================
+       OCI Instance Status
+       ========================= */
+
+    .instance-panel {
+      width: 85%;
+      max-width: 1275px;
+      margin: 24px auto 8px;
+      padding: 24px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 18px;
+    }
+
+    .instance-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .instance-header h2 {
+      margin: 0 0 6px;
+      color: #172033;
+      font-size: 22px;
+    }
+
+    .instance-meta {
+      margin: 0;
+      color: #64748b;
+      font-size: 13px;
+    }
+
+    .refresh-button {
+      padding: 9px 14px;
+      color: #ffffff;
+      background: #245b85;
+      border: 0;
+      border-radius: 9px;
+      cursor: pointer;
+      font: inherit;
+      white-space: nowrap;
+    }
+
+    .refresh-button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    .instance-message {
+      margin: 0;
+      padding: 18px;
+      color: #64748b;
+      text-align: center;
+    }
+
+    .instance-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+    }
+
+    .instance-card {
+      min-width: 0;
+      padding: 18px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 13px;
+      box-shadow: 0 3px 10px rgba(15, 23, 42, 0.04);
+    }
+
+    .instance-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .instance-title h3 {
+      min-width: 0;
+      margin: 0;
+      overflow: hidden;
+      color: #172033;
+      font-size: 17px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .state-badge {
+      padding: 4px 9px;
+      color: #475569;
+      background: #e2e8f0;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .state-badge.running {
+      color: #166534;
+      background: #dcfce7;
+    }
+
+    .instance-details {
+      display: grid;
+      grid-template-columns: 78px minmax(0, 1fr);
+      gap: 8px 12px;
+      margin: 0;
+      font-size: 13px;
+    }
+
+    .instance-details dt {
+      color: #64748b;
+    }
+
+    .instance-details dd {
+      min-width: 0;
+      margin: 0;
+      overflow-wrap: anywhere;
+      color: #334155;
+    }
+
+    /* =========================
        Footer
        ========================= */
 
@@ -165,6 +289,10 @@
         width: 90%;
       }
 
+      .instance-panel {
+        width: 90%;
+      }
+
     }
 
     /* =========================
@@ -182,6 +310,22 @@
 
       .hero {
         width: 96%;
+      }
+
+      .instance-panel {
+        width: 96%;
+        margin-top: 14px;
+        padding: 17px;
+        border-radius: 12px;
+      }
+
+      .instance-header {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .refresh-button {
+        width: 100%;
       }
 
       .hero img {
@@ -219,11 +363,24 @@
   <main class="page">
 
     <section class="hero">
-    <a href=https://cloud.oracle.com/compute/instances?region=ap-tokyo-1>
+    <a href="https://cloud.oracle.com/compute/instances?region=ap-tokyo-1">
       <img
         src="main.gif"
         alt="Free OCI based Personal Cloud Lab">
     </a>
+    </section>
+
+    <section class="instance-panel" aria-labelledby="instance-heading">
+      <div class="instance-header">
+        <div>
+          <h2 id="instance-heading">Oracle 인스턴스 현황</h2>
+          <p class="instance-meta" id="instance-meta">OCI에서 최신 정보를 불러오는 중입니다.</p>
+        </div>
+        <button class="refresh-button" id="refresh-instances" type="button">새로고침</button>
+      </div>
+      <div id="instance-list" aria-live="polite">
+        <p class="instance-message">인스턴스 정보를 불러오는 중입니다.</p>
+      </div>
     </section>
 
   </main>
@@ -256,6 +413,94 @@
     </div>
 
   </footer>
+
+  <script>
+    const instanceList = document.getElementById("instance-list");
+    const instanceMeta = document.getElementById("instance-meta");
+    const refreshButton = document.getElementById("refresh-instances");
+
+    function detailRow(container, label, value) {
+      const term = document.createElement("dt");
+      const description = document.createElement("dd");
+      term.textContent = label;
+      description.textContent = value ?? "-";
+      container.append(term, description);
+    }
+
+    function formatDate(value) {
+      if (!value) return "-";
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ko-KR");
+    }
+
+    function renderInstances(payload) {
+      const instances = Array.isArray(payload.instances) ? payload.instances : [];
+      instanceList.replaceChildren();
+
+      if (instances.length === 0) {
+        const message = document.createElement("p");
+        message.className = "instance-message";
+        message.textContent = "현재 표시할 OCI 인스턴스가 없습니다.";
+        instanceList.append(message);
+      } else {
+        const grid = document.createElement("div");
+        grid.className = "instance-grid";
+
+        instances.forEach((instance) => {
+          const card = document.createElement("article");
+          const title = document.createElement("div");
+          const name = document.createElement("h3");
+          const state = document.createElement("span");
+          const details = document.createElement("dl");
+
+          card.className = "instance-card";
+          title.className = "instance-title";
+          name.textContent = instance.displayName || "이름 없음";
+          name.title = instance.displayName || "";
+          state.className = `state-badge ${instance.lifecycleState === "RUNNING" ? "running" : ""}`;
+          state.textContent = instance.lifecycleState || "UNKNOWN";
+          details.className = "instance-details";
+
+          detailRow(details, "Shape", instance.shape);
+          detailRow(details, "자원", `${instance.ocpus ?? "-"} OCPU / ${instance.memoryInGBs ?? "-"} GB`);
+          detailRow(details, "AD", instance.availabilityDomain);
+          detailRow(details, "생성 시각", formatDate(instance.timeCreated));
+          detailRow(details, "OCID", instance.id);
+
+          title.append(name, state);
+          card.append(title, details);
+          grid.append(card);
+        });
+
+        instanceList.append(grid);
+      }
+
+      instanceMeta.textContent = `리전: ${payload.region || "-"} · 최종 갱신: ${formatDate(payload.updatedAt)}`;
+    }
+
+    async function loadInstances() {
+      refreshButton.disabled = true;
+      try {
+        const response = await fetch(`instance-info.json?t=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        renderInstances(await response.json());
+      } catch (error) {
+        instanceList.replaceChildren();
+        const message = document.createElement("p");
+        message.className = "instance-message";
+        message.textContent = "인스턴스 정보를 불러올 수 없습니다. 서버의 OCI 정보 갱신 스크립트를 확인하세요.";
+        instanceList.append(message);
+        instanceMeta.textContent = "OCI 정보 파일을 확인할 수 없습니다.";
+        console.error("OCI instance information error:", error);
+      } finally {
+        refreshButton.disabled = false;
+      }
+    }
+
+    refreshButton.addEventListener("click", loadInstances);
+    loadInstances();
+    window.setInterval(loadInstances, 120000);
+  </script>
 
 </body>
 </html>

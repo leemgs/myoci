@@ -8,6 +8,7 @@ Oracle Cloud Infrastructure(OCI)의 Always Free **ARM(VM.Standard.A1.Flex,
 ## 주요 파일
 
 - `script/add-arm-instance.sh` — OCI ARM 인스턴스 생성 스크립트 (cron용, 1주기 실행 후 종료)
+- `script/update-instance-info.sh` — OCI CLI 조회 결과를 웹 표시용 JSON으로 갱신
 - `docs/` — 프로젝트 소개용 정적 웹 페이지 (`main.gif` 애니메이션 히어로 이미지)
 
 실행 중 스크립트가 같은 폴더에 자동 생성/관리하는 파일:
@@ -98,6 +99,44 @@ sudo ln -s /usr/bin/s-nail /usr/bin/mail
 rm -f script/add-arm-instance.state
 ./script/add-arm-instance.sh
 ```
+
+## 웹에서 인스턴스 정보 확인
+
+`script/update-instance-info.sh`는 서버의 `/etc/environment`에서 OCI 설정을
+불러온 뒤 `oci compute instance list`를 실행합니다. 조회 결과는 공개해도 되는
+필드만 `docs/instance-info.json`에 저장되며, 웹 페이지가 이 파일을 읽어 인스턴스
+이름, 상태, Shape, OCPU, 메모리, AD와 생성 시각을 표시합니다.
+
+OCI CLI를 실행할 서버에서 다음 변수를 `/etc/environment`에 추가합니다. 실제
+compartment OCID와 서버 경로에 맞게 값을 변경하세요.
+
+```bash
+sudo tee -a /etc/environment >/dev/null <<'EOF'
+OCI_CLI_CONFIG_FILE="/home/ubuntu/.oci/config"
+OCI_CLI_PROFILE="DEFAULT"
+OCI_REGION="ap-tokyo-1"
+OCI_COMPARTMENT_ID="ocid1.compartment.oc1..여기에_compartment_OCID"
+OCI_INSTANCE_INFO_FILE="/var/www/html/myoci/docs/instance-info.json"
+EOF
+```
+
+`/etc/environment`에는 OCI API 개인 키 내용이나 SMTP 비밀번호를 넣지 마세요.
+OCI CLI 인증 키와 설정 파일은 `ubuntu` 사용자만 읽을 수 있도록 권한을 제한합니다.
+설정 후 아래 명령으로 JSON을 생성할 수 있습니다.
+
+```bash
+sudo chmod +x /var/www/html/myoci/script/update-instance-info.sh
+/var/www/html/myoci/script/update-instance-info.sh
+```
+
+인스턴스 상태를 주기적으로 갱신하려면 `crontab -e`에 다음 항목을 등록합니다.
+
+```cron
+*/2 * * * * /var/www/html/myoci/script/update-instance-info.sh >> /var/www/html/myoci/script/update-instance-info.log 2>&1
+```
+
+웹 서버 프로세스가 `docs/instance-info.json`을 읽을 수 있어야 하고, 스크립트를
+실행하는 사용자는 `docs/` 디렉터리에 파일을 생성할 권한이 있어야 합니다.
 
 ## 확보 가능성 통계
 
