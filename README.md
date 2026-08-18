@@ -1,40 +1,103 @@
 # myoci
 
-Oracle Cloud Infrastructure(OCI)의 Always Free ARM 인스턴스 생성을 자동으로
-시도하고, 생성에 성공하면 이메일로 알려 주는 간단한 스크립트입니다.
+Oracle Cloud Infrastructure(OCI)의 Always Free **ARM(VM.Standard.A1.Flex,
+1 OCPU / 6GB)** 인스턴스 생성을 자동으로 시도하고, 생성에 성공하면 이메일로
+알려 주는 스크립트입니다. 용량을 더 빨리 확보하기 위해 **fault domain을 순회**
+시도하고, OCI가 요청을 제한(HTTP 429)하면 **지수적 백오프**로 물러납니다.
 
 ## 주요 파일
 
-- `script/add-arm-instance.sh`: OCI ARM 인스턴스 생성 스크립트
-- `docs/`: 프로젝트 소개용 정적 웹 페이지
+- `script/add-arm-instance.sh` — OCI ARM 인스턴스 생성 스크립트 (cron용, 1주기 실행 후 종료)
+- `docs/` — 프로젝트 소개용 정적 웹 페이지 (`main.gif` 애니메이션 히어로 이미지)
+
+실행 중 스크립트가 같은 폴더에 자동 생성/관리하는 파일:
+
+- `add-arm-instance.log` — 실행 로그
+- `add-arm-instance.state` — 429 백오프 상태(레벨/해제 시각)
+- `add-arm-instance.done` — 성공 lock (존재하면 더 이상 시도하지 않음)
+- `add-arm-instance.log.mail.log` — 성공 이메일 전송 시 SMTP 상세 로그
+
+## 동작 방식
+
+한 번 실행하면 아래 순서로 진행하고 종료합니다.
+
+1. **lock 확인** — `*.done`이 있으면(이미 성공) 즉시 종료.
+2. **백오프 확인** — 429 백오프 대기 창 안이면 이번 주기를 건너뛰고 종료.
+3. **Fault domain 순회 시도** — `FAULT-DOMAIN-1 → 2 → 3` 순으로 launch를 시도.
+
+각 시도 결과에 따른 처리:
+
+| 결과 | 동작 |
+| --- | --- |
+| 성공 (`"id"` 반환) | lock 생성, 백오프 초기화, **성공 이메일 전송**, 종료 |
+| 용량 부족 (Out of host capacity) | 다음 fault domain으로 계속 (3초 간격) |
+| 요청 과다 (HTTP 429) | 이번 주기 나머지 FD를 건너뛰고 **백오프 진입** |
+| 한도 초과 (LimitExceeded/QuotaExceeded) | lock 생성 후 중단 (사람이 확인 필요) |
+| 그 외 예상 밖 응답 | 로그 남기고 다음 FD 시도 |
+
+> **Fault domain 순회 이유**: A1 무료 용량은 fault domain별로 따로 관리되므로,
+> 한 FD가 "용량 부족"이어도 다른 FD에는 여유가 있을 수 있습니다. 세 FD를 모두
+> 훑어 어느 하나라도 열리면 즉시 확보합니다.
+
+## 429 지수적 백오프
+
+OCI가 테넌시 단위로 요청을 제한(429)하면, 같은 간격으로 계속 두드리는 것은
+오히려 역효과입니다. 그래서 429가 나면 대기 시간을 지수적으로 늘립니다.
+
+| 연속 429 | 대기 시간 |
+| --- | --- |
+| 1회 | 5분 |
+| 2회 | 10분 |
+| 3회 | 20분 |
+| 4회 | 40분 |
+| 5회 이상 | 60분 (상한) |
+
+- 대기 시간과 상한은 스크립트 상단 `BACKOFF_BASE_MIN`(기본 5),
+  `BACKOFF_MAX_MIN`(기본 60)으로 조정합니다.
+- **429가 아닌 응답**(용량 부족·성공 등)이 한 번이라도 오면 백오프는 즉시
+  초기화되어 빠른 재시도 주기로 복귀합니다. 즉 쓰로틀이 풀리면 스스로 정상화됩니다.
+- 상태는 `add-arm-instance.state`에 저장되며, cron·수동 실행 모두에 적용됩니다.
 
 ## 준비 사항
 
-- [OCI CLI](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm) 설치 및 설정
+- [OCI CLI](https://docs.oracle.com/en-us/iaas/Content/API/SDKDocs/cliinstall.htm) 설치 및 설정 (`~/.oci/config`)
 - OCI 인스턴스에 등록할 SSH 공개 키
 - 성공 알림을 위한 `s-nail`과 SMTP 설정 파일(`/home/ubuntu/.mailrc`)
 
-Ubuntu에서는 다음 명령으로 `s-nail`을 설치할 수 있습니다.
+Ubuntu에서는 다음 명령으로 `s-nail`을 설치합니다.
 
 ```bash
 sudo apt install s-nail
 sudo ln -s /usr/bin/s-nail /usr/bin/mail
 ```
 
+`~/.mailrc`에는 Gmail SMTP(STARTTLS, 587, **앱 비밀번호**)를 설정합니다.
+성공 이메일은 `mail -v`로 전송되며 실행 로그를 첨부합니다.
+
 ## 사용 방법
 
 1. `script/add-arm-instance.sh` 상단의 OCI 리소스 ID, SSH 키 경로,
-   인스턴스 사양과 이메일 주소를 환경에 맞게 수정합니다.
+   인스턴스 사양, fault domain 목록, 이메일 주소를 환경에 맞게 수정합니다.
 2. SMTP 비밀번호는 저장소에 기록하지 말고 `/home/ubuntu/.mailrc`에 설정합니다.
-3. 스크립트를 실행합니다.
+3. cron에 등록해 주기적으로 실행합니다 (예: 2분마다).
+
+```cron
+*/2 * * * * ubuntu /var/www/html/myoci/script/add-arm-instance.sh
+```
+
+수동으로 한 번 실행하려면:
 
 ```bash
 ./script/add-arm-instance.sh
 ```
 
-인스턴스 생성에 성공하면 lock 파일을 생성하여 중복 실행을 방지하고,
-설정된 수신자에게 인스턴스 정보를 이메일로 전송합니다. 용량 부족이나 요청
-제한이 발생하면 다음 실행 시 다시 시도할 수 있습니다.
+백오프 대기 중에는 수동 실행도 "이번 주기 건너뜀"으로 즉시 종료됩니다.
+테스트 목적으로 백오프를 무시하고 강제로 시도하려면 상태 파일을 지웁니다.
+
+```bash
+rm -f script/add-arm-instance.state
+./script/add-arm-instance.sh
+```
 
 ## 확보 가능성 통계
 
@@ -49,7 +112,7 @@ OCI의 가용 용량은 시간대별로 달라지므로 앞으로의 성공 가�
 - 요청 시작 시각과 완료까지 걸린 시간
 - 성공, 용량 부족, HTTP 429, 한도 초과, 기타 오류의 구분
 - OCI CLI 종료 코드
-- 요청한 Availability Domain, Shape, OCPU 및 메모리
+- 요청한 Availability Domain, Fault Domain, Shape, OCPU 및 메모리
 
 설정 오류와 HTTP 429처럼 실제 용량을 확인하지 못한 요청은 제외하고 아래와
 같이 유효 시도 성공률을 계산합니다.
@@ -59,7 +122,7 @@ OCI의 가용 용량은 시간대별로 달라지므로 앞으로의 성공 가�
 ```
 
 시간대별 성공률도 함께 집계하면 실행 주기를 조정하는 데 도움이 됩니다. API
-요청 제한이 반복될 때는 고정된 2분 주기보다 점진적 대기(exponential backoff)를
-적용하는 것이 좋습니다.
+요청 제한이 반복될 때 고정 간격으로 재시도하지 않도록, 이 스크립트는 위에서
+설명한 지수적 백오프(exponential backoff)를 적용합니다.
 
 > `.mailrc`, OCI API 키, SMTP 비밀번호 등 인증 정보는 Git에 커밋하지 마세요.
