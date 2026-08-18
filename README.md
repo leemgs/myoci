@@ -108,6 +108,8 @@ rm -f script/data/add-arm-instance.state
 이름, 상태, Shape, OCPU, 메모리, AD와 생성 시각을 표시합니다.
 페이지를 처음 열면 `Home` 메뉴가 선택되어 메인 이미지를 표시하고, 우측 상단의
 `Oracle Instance Status` 메뉴를 선택하면 OCI 인스턴스 현황 화면으로 전환됩니다.
+`About OCI` 메뉴에서는 Always Free 제공 자원, SSH·네트워크 기본 사항, 주요
+무료 서비스, 장단점과 Oracle 공식 참고 링크를 확인할 수 있습니다.
 
 OCI CLI를 실행할 서버에서 다음 변수를 `/etc/environment`에 추가합니다. 실제
 compartment OCID와 서버 경로에 맞게 값을 변경하세요.
