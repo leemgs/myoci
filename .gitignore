@@ -1,3 +1,4 @@
 .env
 *.log
 docs/instance-info.json
+script/data/

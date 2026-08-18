@@ -24,12 +24,16 @@ export PATH="/home/ubuntu/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 
 OCI_CLI_CONFIG_FILE="${OCI_CLI_CONFIG_FILE:-/home/ubuntu/.oci/config}"
 OCI_CLI_PROFILE="${OCI_CLI_PROFILE:-DEFAULT}"
+OCI_CLI_BIN="${OCI_CLI_BIN:-/home/ubuntu/bin/oci}"
 OCI_INSTANCE_INFO_FILE="${OCI_INSTANCE_INFO_FILE:-/var/www/html/myoci/docs/instance-info.json}"
 export OCI_CLI_CONFIG_FILE
 
-if ! command -v oci >/dev/null 2>&1; then
-  echo "오류: oci 명령을 찾을 수 없습니다." >&2
-  exit 1
+if [ ! -x "$OCI_CLI_BIN" ]; then
+  OCI_CLI_BIN=$(command -v oci 2>/dev/null || true)
+  if [ -z "$OCI_CLI_BIN" ] || [ ! -x "$OCI_CLI_BIN" ]; then
+    echo "오류: OCI CLI를 찾을 수 없습니다. /etc/environment의 OCI_CLI_BIN을 확인하세요." >&2
+    exit 1
+  fi
 fi
 
 if ! command -v python3 >/dev/null 2>&1; then
@@ -46,7 +50,7 @@ raw_file="$work_dir/oci-instances.json"
 output_file="$work_dir/instance-info.json"
 
 # 웹에는 인스턴스 조회 결과 중 운영에 필요한 필드만 공개한다.
-if ! oci compute instance list \
+if ! "$OCI_CLI_BIN" compute instance list \
   --compartment-id "$OCI_COMPARTMENT_ID" \
   --region "$OCI_REGION" \
   --profile "$OCI_CLI_PROFILE" \

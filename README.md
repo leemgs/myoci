@@ -13,10 +13,10 @@ Oracle Cloud Infrastructure(OCI)의 Always Free **ARM(VM.Standard.A1.Flex,
 
 실행 중 스크립트가 같은 폴더에 자동 생성/관리하는 파일:
 
-- `add-arm-instance.log` — 실행 로그
-- `add-arm-instance.state` — 429 백오프 상태(레벨/해제 시각)
-- `add-arm-instance.done` — 성공 lock (존재하면 더 이상 시도하지 않음)
-- `add-arm-instance.log.mail.log` — 성공 이메일 전송 시 SMTP 상세 로그
+- `data/add-arm-instance.log` — 실행 로그
+- `data/add-arm-instance.state` — 429 백오프 상태(레벨/해제 시각)
+- `data/add-arm-instance.done` — 성공 lock (존재하면 더 이상 시도하지 않음)
+- `data/add-arm-instance.log.mail.log` — 성공 이메일 전송 시 SMTP 상세 로그
 
 ## 동작 방식
 
@@ -96,7 +96,7 @@ sudo ln -s /usr/bin/s-nail /usr/bin/mail
 테스트 목적으로 백오프를 무시하고 강제로 시도하려면 상태 파일을 지웁니다.
 
 ```bash
-rm -f script/add-arm-instance.state
+rm -f script/data/add-arm-instance.state
 ./script/add-arm-instance.sh
 ```
 
@@ -114,8 +114,9 @@ compartment OCID와 서버 경로에 맞게 값을 변경하세요.
 sudo tee -a /etc/environment >/dev/null <<'EOF'
 OCI_CLI_CONFIG_FILE="/home/ubuntu/.oci/config"
 OCI_CLI_PROFILE="DEFAULT"
+OCI_CLI_BIN="/home/ubuntu/bin/oci"
 OCI_REGION="ap-tokyo-1"
-OCI_COMPARTMENT_ID="ocid1.compartment.oc1..여기에_compartment_OCID"
+OCI_COMPARTMENT_ID="ocid1.tenancy.oc1..aaaaaaaaai73qezllecwan2mibvjymv2g5u63xmumwbh5ghoya2vwiicckea"
 OCI_INSTANCE_INFO_FILE="/var/www/html/myoci/docs/instance-info.json"
 EOF
 ```
@@ -125,6 +126,7 @@ OCI CLI 인증 키와 설정 파일은 `ubuntu` 사용자만 읽을 수 있도�
 설정 후 아래 명령으로 JSON을 생성할 수 있습니다.
 
 ```bash
+mkdir -p /var/www/html/myoci/script/data
 sudo chmod +x /var/www/html/myoci/script/update-instance-info.sh
 /var/www/html/myoci/script/update-instance-info.sh
 ```
@@ -139,13 +141,13 @@ python3 -m json.tool /var/www/html/myoci/docs/instance-info.json
 
 `add-arm-instance.sh`는 실행을 시작할 때마다 이 갱신 스크립트를 호출합니다.
 따라서 기존 ARM 생성 cron이 동작 중이면 성공 lock이 이미 있어도 웹 정보는
-계속 갱신됩니다. OCI CLI가 `/home/ubuntu/bin/oci`에 설치된 경우도 cron에서
-찾을 수 있도록 갱신 스크립트가 해당 경로를 PATH에 자동으로 추가합니다.
+계속 갱신됩니다. 갱신 스크립트는 `OCI_CLI_BIN`의 절대 경로를 우선 사용하므로
+`/etc/environment`의 PATH에 `/home/ubuntu/bin`이 없어도 OCI CLI를 실행합니다.
 
 인스턴스 상태를 주기적으로 갱신하려면 `crontab -e`에 다음 항목을 등록합니다.
 
 ```cron
-*/2 * * * * /var/www/html/myoci/script/update-instance-info.sh >> /var/www/html/myoci/script/update-instance-info.log 2>&1
+*/2 * * * * /var/www/html/myoci/script/update-instance-info.sh >> /var/www/html/myoci/script/data/update-instance-info.log 2>&1
 ```
 
 웹 서버 프로세스가 `docs/instance-info.json`을 읽을 수 있어야 하고, 스크립트를
@@ -161,7 +163,8 @@ cd /var/www/html/myoci
 
 # 1. OCI CLI와 환경변수 확인
 command -v oci
-sudo grep -E '^OCI_(CLI_CONFIG_FILE|CLI_PROFILE|REGION|COMPARTMENT_ID|INSTANCE_INFO_FILE)=' /etc/environment
+test -x /home/ubuntu/bin/oci && /home/ubuntu/bin/oci --version
+sudo grep -E '^OCI_(CLI_CONFIG_FILE|CLI_PROFILE|CLI_BIN|REGION|COMPARTMENT_ID|INSTANCE_INFO_FILE)=' /etc/environment
 
 # 2. 갱신 스크립트를 ubuntu 사용자로 실행
 sudo -u ubuntu ./script/update-instance-info.sh

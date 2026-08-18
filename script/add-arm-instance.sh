@@ -14,9 +14,11 @@ DISPLAY_NAME="free-arm-01"
 SHAPE="VM.Standard.A1.Flex"
 OCPUS=1
 MEM_GB=6
-LOG_FILE="/var/www/html/myoci/script/add-arm-instance.log"
-LOCK_FILE="/var/www/html/myoci/script/add-arm-instance.done"
-STATE_FILE="/var/www/html/myoci/script/add-arm-instance.state"
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+DATA_DIR="$SCRIPT_DIR/data"
+LOG_FILE="$DATA_DIR/add-arm-instance.log"
+LOCK_FILE="$DATA_DIR/add-arm-instance.done"
+STATE_FILE="$DATA_DIR/add-arm-instance.state"
 EMAIL_TO="leemgs@gmail.com"
 MAILRC_FILE="/home/ubuntu/.mailrc"
 
@@ -28,6 +30,12 @@ BACKOFF_MAX_MIN=60     # 최대 대기(분) 상한
 
 export PATH="/home/ubuntu/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 export OCI_CLI_CONFIG_FILE="/home/ubuntu/.oci/config"
+
+# 로그, lock, 백오프 상태는 Git 소스와 분리된 runtime data 폴더에 저장한다.
+mkdir -p "$DATA_DIR" || {
+  echo "오류: runtime data 디렉터리를 생성할 수 없습니다: $DATA_DIR" >&2
+  exit 1
+}
 
 # 화면+로그 동시 출력 함수
 log() { echo "$(date) - $*" | tee -a "$LOG_FILE"; }
@@ -121,7 +129,7 @@ send_success_email() {
 # 인스턴스 생성 여부와 관계없이 현재 OCI 상태를 웹 표시용 JSON으로 갱신한다.
 # 이미 성공 lock이 존재해도 cron 실행 때마다 최신 상태를 반영한다.
 refresh_instance_info() {
-  local updater="$(dirname "$0")/update-instance-info.sh"
+  local updater="$SCRIPT_DIR/update-instance-info.sh"
 
   if [ ! -x "$updater" ]; then
     log "⚠️ 웹 인스턴스 정보 갱신 실패: 실행 가능한 $updater 파일이 없음"
