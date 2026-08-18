@@ -17,6 +17,7 @@ Oracle Cloud Infrastructure(OCI)의 Always Free **ARM(VM.Standard.A1.Flex,
 - `data/add-arm-instance.state` — 429 백오프 상태(레벨/해제 시각)
 - `data/add-arm-instance.done` — 성공 lock (존재하면 더 이상 시도하지 않음)
 - `data/add-arm-instance.log.mail.log` — 성공 이메일 전송 시 SMTP 상세 로그
+- `../docs/arm-launch-status.json` — 웹에 공개하는 최근 ARM 생성 시도 결과
 
 ## 동작 방식
 
@@ -110,6 +111,10 @@ rm -f script/data/add-arm-instance.state
 `Oracle Instance Status` 메뉴를 선택하면 OCI 인스턴스 현황 화면으로 전환됩니다.
 `About OCI` 메뉴에서는 Always Free 제공 자원, SSH·네트워크 기본 사항, 주요
 무료 서비스, 장단점과 Oracle 공식 참고 링크를 확인할 수 있습니다.
+`Oracle Instance Status` 메뉴에는 현재 OCI 인스턴스 목록과 함께 최근 ARM 생성
+시도의 상태(시도 중, 용량 부족, 429 백오프, 실패, 성공), Fault Domain, 다음
+재시도 시각 및 오류 요약이 표시됩니다. 이 정보는 `add-arm-instance.sh`가
+`docs/arm-launch-status.json`에 원자적으로 기록합니다.
 
 각 화면은 아래 주소로 직접 접속할 수 있습니다. 메뉴를 클릭할 때는 페이지를
 다시 내려받지 않고 화면과 주소만 전환하며, 직접 URL로 접속하면 해당 화면으로

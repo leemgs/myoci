@@ -222,6 +222,67 @@
       text-align: center;
     }
 
+    .launch-status-panel {
+      margin-bottom: 18px;
+      padding: 18px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-left: 5px solid #94a3b8;
+      border-radius: 12px;
+    }
+
+    .launch-status-panel.success { border-left-color: #16a34a; }
+    .launch-status-panel.warning { border-left-color: #d97706; }
+    .launch-status-panel.error { border-left-color: #dc2626; }
+    .launch-status-panel.progress { border-left-color: #2563eb; }
+
+    .launch-status-heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .launch-status-heading h3 { margin: 0; color: #172033; font-size: 17px; }
+
+    .launch-status-badge {
+      padding: 4px 9px;
+      color: #475569;
+      background: #e2e8f0;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .launch-status-message { margin: 0 0 12px; color: #334155; font-size: 14px; line-height: 1.6; }
+
+    .launch-status-details {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 0;
+    }
+
+    .launch-status-details div { padding: 9px; background: #f8fafc; border-radius: 8px; }
+    .launch-status-details dt { margin-bottom: 3px; color: #64748b; font-size: 11px; }
+    .launch-status-details dd { margin: 0; color: #334155; font-size: 12px; overflow-wrap: anywhere; }
+
+    .launch-error-details {
+      max-height: 150px;
+      margin: 12px 0 0;
+      padding: 11px;
+      overflow: auto;
+      color: #7f1d1d;
+      background: #fef2f2;
+      border-radius: 8px;
+      font-size: 11px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
     .instance-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -530,6 +591,10 @@
         flex-direction: column;
       }
 
+      .launch-status-details {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
       .refresh-button {
         width: 100%;
       }
@@ -624,6 +689,20 @@
         </div>
         <button class="refresh-button" id="refresh-instances" type="button">새로고침</button>
       </div>
+      <article class="launch-status-panel" id="arm-launch-status" aria-labelledby="arm-launch-heading">
+        <div class="launch-status-heading">
+          <h3 id="arm-launch-heading">ARM 인스턴스 생성 시도</h3>
+          <span class="launch-status-badge" id="arm-launch-badge">확인 중</span>
+        </div>
+        <p class="launch-status-message" id="arm-launch-message">최근 생성 시도 결과를 불러오는 중입니다.</p>
+        <dl class="launch-status-details">
+          <div><dt>마지막 갱신</dt><dd id="arm-launch-updated">-</dd></div>
+          <div><dt>Fault Domain</dt><dd id="arm-launch-fd">-</dd></div>
+          <div><dt>백오프</dt><dd id="arm-launch-backoff">-</dd></div>
+          <div><dt>다음 재시도</dt><dd id="arm-launch-retry">-</dd></div>
+        </dl>
+        <pre class="launch-error-details" id="arm-launch-details" hidden></pre>
+      </article>
       <div id="instance-list" aria-live="polite">
         <p class="instance-message">인스턴스 정보를 불러오는 중입니다.</p>
       </div>
@@ -760,6 +839,14 @@
     const instanceList = document.getElementById("instance-list");
     const instanceMeta = document.getElementById("instance-meta");
     const refreshButton = document.getElementById("refresh-instances");
+    const launchStatusPanel = document.getElementById("arm-launch-status");
+    const launchStatusBadge = document.getElementById("arm-launch-badge");
+    const launchStatusMessage = document.getElementById("arm-launch-message");
+    const launchStatusUpdated = document.getElementById("arm-launch-updated");
+    const launchStatusFd = document.getElementById("arm-launch-fd");
+    const launchStatusBackoff = document.getElementById("arm-launch-backoff");
+    const launchStatusRetry = document.getElementById("arm-launch-retry");
+    const launchStatusDetails = document.getElementById("arm-launch-details");
     const homeView = document.getElementById("home-view");
     const instanceView = document.getElementById("instance-view");
     const aboutView = document.getElementById("about-view");
@@ -825,6 +912,54 @@
       instanceMeta.textContent = `리전: ${payload.region || "-"} · 최종 갱신: ${formatDate(payload.updatedAt)}`;
     }
 
+    function renderLaunchStatus(payload) {
+      const statusStyles = {
+        ATTEMPTING: ["시도 중", "progress"],
+        SUCCESS: ["성공", "success"],
+        BACKOFF: ["백오프 대기", "warning"],
+        THROTTLED: ["요청 제한", "warning"],
+        CAPACITY_SHORTAGE: ["용량 부족", "warning"],
+        LIMIT_EXCEEDED: ["한도 초과", "error"],
+        ERROR: ["실패", "error"],
+        LOCKED: ["실행 중단", "warning"],
+      };
+      const [label, style] = statusStyles[payload.status] || [payload.status || "알 수 없음", ""];
+
+      launchStatusPanel.className = `launch-status-panel ${style}`.trim();
+      launchStatusBadge.textContent = label;
+      launchStatusMessage.textContent = payload.message || "생성 시도 메시지가 없습니다.";
+      launchStatusUpdated.textContent = formatDate(payload.updatedAt);
+      launchStatusFd.textContent = payload.faultDomain || "-";
+      launchStatusBackoff.textContent = payload.backoffLevel > 0 ? `level ${payload.backoffLevel}` : "없음";
+      launchStatusRetry.textContent = formatDate(payload.nextRetryAt);
+
+      if (payload.details) {
+        launchStatusDetails.textContent = payload.details;
+        launchStatusDetails.hidden = false;
+      } else {
+        launchStatusDetails.textContent = "";
+        launchStatusDetails.hidden = true;
+      }
+    }
+
+    async function loadLaunchStatus() {
+      try {
+        const response = await fetch(`arm-launch-status.json?t=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        renderLaunchStatus(await response.json());
+      } catch (error) {
+        launchStatusPanel.className = "launch-status-panel";
+        launchStatusBadge.textContent = "기록 없음";
+        launchStatusMessage.textContent = "아직 공개된 ARM 생성 시도 결과가 없습니다.";
+        launchStatusUpdated.textContent = "-";
+        launchStatusFd.textContent = "-";
+        launchStatusBackoff.textContent = "-";
+        launchStatusRetry.textContent = "-";
+        launchStatusDetails.hidden = true;
+        console.error("ARM launch status error:", error);
+      }
+    }
+
     async function loadInstances() {
       refreshButton.disabled = true;
       try {
@@ -845,6 +980,10 @@
       }
     }
 
+    async function loadStatusView() {
+      await Promise.allSettled([loadInstances(), loadLaunchStatus()]);
+    }
+
     function showView(viewName, updateAddress = true) {
       const showInstances = viewName === "instances";
       const showAbout = viewName === "about";
@@ -863,10 +1002,10 @@
         window.history.pushState({ view: viewName }, "", page);
       }
 
-      if (showInstances && !instancesLoaded) loadInstances();
+      if (showInstances && !instancesLoaded) loadStatusView();
     }
 
-    refreshButton.addEventListener("click", loadInstances);
+    refreshButton.addEventListener("click", loadStatusView);
     viewButtons.forEach((button) => {
       button.addEventListener("click", (event) => {
         event.preventDefault();
@@ -885,7 +1024,7 @@
     showView(initialView, false);
     window.addEventListener("popstate", () => showView(viewFromLocation(), false));
     window.setInterval(() => {
-      if (!instanceView.hidden) loadInstances();
+      if (!instanceView.hidden) loadStatusView();
     }, 120000);
   </script>
 

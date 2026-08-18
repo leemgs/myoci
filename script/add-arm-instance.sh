@@ -19,6 +19,7 @@ DATA_DIR="$SCRIPT_DIR/data"
 LOG_FILE="$DATA_DIR/add-arm-instance.log"
 LOCK_FILE="$DATA_DIR/add-arm-instance.done"
 STATE_FILE="$DATA_DIR/add-arm-instance.state"
+ARM_STATUS_FILE="$(dirname "$SCRIPT_DIR")/docs/arm-launch-status.json"
 EMAIL_TO="leemgs@gmail.com"
 MAILRC_FILE="/home/ubuntu/.mailrc"
 
@@ -39,6 +40,61 @@ mkdir -p "$DATA_DIR" || {
 
 # 화면+로그 동시 출력 함수
 log() { echo "$(date) - $*" | tee -a "$LOG_FILE"; }
+
+# ARM 생성 시도 결과를 웹에서 읽을 수 있는 JSON으로 안전하게 교체한다.
+publish_launch_status() {
+  local status="$1"
+  local message="$2"
+  local fault_domain="${3:-}"
+  local details="${4:-}"
+  local output_dir
+  local output_tmp
+
+  output_dir=$(dirname "$ARM_STATUS_FILE")
+  mkdir -p "$output_dir" || return 1
+  output_tmp=$(mktemp "$output_dir/.arm-launch-status.XXXXXX") || return 1
+
+  STATUS_FILE="$output_tmp" STATUS="$status" MESSAGE="$message" \
+  FAULT_DOMAIN="$fault_domain" DETAILS="$details" DISPLAY_NAME="$DISPLAY_NAME" \
+  SHAPE="$SHAPE" OCPUS="$OCPUS" MEM_GB="$MEM_GB" AD="$AD" \
+  BACKOFF_LEVEL="${BACKOFF_LEVEL:-0}" BACKOFF_UNTIL="${BACKOFF_UNTIL:-0}" \
+  python3 <<'PY'
+import json
+import os
+from datetime import datetime, timezone
+
+backoff_until = int(os.environ["BACKOFF_UNTIL"] or 0)
+next_retry_at = None
+if backoff_until > 0:
+    next_retry_at = datetime.fromtimestamp(backoff_until, timezone.utc).isoformat()
+
+payload = {
+    "updatedAt": datetime.now(timezone.utc).isoformat(),
+    "status": os.environ["STATUS"],
+    "message": os.environ["MESSAGE"],
+    "details": os.environ["DETAILS"][:2000] or None,
+    "displayName": os.environ["DISPLAY_NAME"],
+    "shape": os.environ["SHAPE"],
+    "ocpus": int(os.environ["OCPUS"]),
+    "memoryInGBs": int(os.environ["MEM_GB"]),
+    "availabilityDomain": os.environ["AD"],
+    "faultDomain": os.environ["FAULT_DOMAIN"] or None,
+    "backoffLevel": int(os.environ["BACKOFF_LEVEL"] or 0),
+    "nextRetryAt": next_retry_at,
+}
+
+with open(os.environ["STATUS_FILE"], "w", encoding="utf-8") as target:
+    json.dump(payload, target, ensure_ascii=False, indent=2)
+    target.write("\n")
+PY
+  if [ "$?" -ne 0 ]; then
+    rm -f "$output_tmp"
+    return 1
+  fi
+
+  chmod 0644 "$output_tmp"
+  mv -f "$output_tmp" "$ARM_STATUS_FILE"
+}
 
 # ---- 백오프 상태 파일 입출력 (source 대신 안전하게 파싱) ----
 BACKOFF_LEVEL=0
@@ -149,6 +205,13 @@ refresh_instance_info
 
 # 이미 성공했으면 즉시 종료
 if [ -f "$LOCK_FILE" ]; then
+  if [ ! -r "$ARM_STATUS_FILE" ]; then
+    publish_launch_status \
+      "LOCKED" \
+      "실행 중단 lock이 존재합니다. 기존 로그에서 성공 또는 한도 초과 결과를 확인하세요." \
+      "" \
+      "lock file: $LOCK_FILE"
+  fi
   log "이미 성공(lock 존재). 종료."
   exit 0
 fi
@@ -159,6 +222,11 @@ NOW=$(date +%s)
 if [ "${BACKOFF_UNTIL:-0}" -gt "$NOW" ]; then
   remain_min=$(( (BACKOFF_UNTIL - NOW + 59) / 60 ))
   log "백오프 대기 중(429, level=$BACKOFF_LEVEL). 약 ${remain_min}분 후 재시도. 이번 주기 건너뜀."
+  publish_launch_status \
+    "BACKOFF" \
+    "OCI 요청 제한으로 백오프 대기 중입니다. 약 ${remain_min}분 후 재시도합니다." \
+    "" \
+    "HTTP 429 · backoff level=$BACKOFF_LEVEL"
   exit 0
 fi
 
@@ -187,6 +255,7 @@ unexpected=""
 
 for FD in "${FAULT_DOMAINS[@]}"; do
   log "시도 중... ($FD)"
+  publish_launch_status "ATTEMPTING" "ARM 인스턴스 생성을 시도하고 있습니다." "$FD"
   RESULT=$(launch_instance "$FD")
 
   if echo "$RESULT" | grep -q '"id"'; then
@@ -196,6 +265,11 @@ for FD in "${FAULT_DOMAINS[@]}"; do
     touch "$LOCK_FILE"
     reset_backoff
     log "lock 생성. 더 이상 시도 안 함."
+    publish_launch_status \
+      "SUCCESS" \
+      "ARM 인스턴스 생성에 성공했습니다." \
+      "$FD" \
+      "인스턴스 ID: ${INSTANCE_ID:-확인 불가}"
     send_success_email "${INSTANCE_ID:-확인 불가}"
     launched=1
     break
@@ -216,6 +290,11 @@ for FD in "${FAULT_DOMAINS[@]}"; do
     log "⚠️ 한도 초과. 확인 필요. 중단."
     echo "$RESULT" | tee -a "$LOG_FILE"
     touch "$LOCK_FILE"
+    publish_launch_status \
+      "LIMIT_EXCEEDED" \
+      "OCI 서비스 한도 또는 할당량을 초과하여 생성이 중단되었습니다." \
+      "$FD" \
+      "$RESULT"
     exit 0
 
   else
@@ -231,12 +310,29 @@ if [ "$launched" -eq 1 ]; then
   :   # 성공 처리 완료
 elif [ "$saw_429" -eq 1 ]; then
   enter_backoff
+  publish_launch_status \
+    "THROTTLED" \
+    "OCI HTTP 429 요청 제한이 발생하여 백오프에 진입했습니다." \
+    "$FD" \
+    "$RESULT"
 else
   reset_backoff
-  [ "$saw_capacity" -eq 1 ] && log "모든 FD 용량 부족. 다음 주기에 재시도."
+  if [ "$saw_capacity" -eq 1 ]; then
+    log "모든 FD 용량 부족. 다음 주기에 재시도."
+    publish_launch_status \
+      "CAPACITY_SHORTAGE" \
+      "모든 Fault Domain에서 ARM 가용 용량이 부족했습니다. 다음 주기에 재시도합니다." \
+      "" \
+      "Out of host capacity"
+  fi
   if [ -n "$unexpected" ]; then
     log "예상 밖 응답 상세:"
     echo "$unexpected" | tee -a "$LOG_FILE"
+    publish_launch_status \
+      "ERROR" \
+      "ARM 인스턴스 생성 중 예상하지 못한 오류가 발생했습니다." \
+      "" \
+      "$unexpected"
   fi
 fi
 
