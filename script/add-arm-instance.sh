@@ -4,6 +4,9 @@
 # ===== 확인된 값 =====
 COMPARTMENT_ID="ocid1.tenancy.oc1..aaaaaaaaai73qezllecwan2mibvjymv2g5u63xmumwbh5ghoya2vwiicckea"
 AD="mVhA:AP-TOKYO-1-AD-1"
+# 용량(Out of host capacity)은 fault domain 별로 따로 잡히므로, 한 주기에
+# FD-1→2→3 을 순회 시도해 조기 확보 확률을 높인다. (하나라도 성공하면 종료)
+FAULT_DOMAINS=("FAULT-DOMAIN-1" "FAULT-DOMAIN-2" "FAULT-DOMAIN-3")
 IMAGE_ID="ocid1.image.oc1.ap-tokyo-1.aaaaaaaa7z7ownzqrqgvf4x6kf2yb7enpdtfm74ao7miu6tkppoenqnt735a"
 SUBNET_ID="ocid1.subnet.oc1.ap-tokyo-1.aaaaaaaa42qsegafrbtnp7r4vvvvn3fv65gocrecqjlkd2djzuu3yqeyl6sq"
 SSH_KEY_FILE="/home/ubuntu/.ssh/id_rsa.pub"
@@ -130,42 +133,82 @@ if [ "${BACKOFF_UNTIL:-0}" -gt "$NOW" ]; then
   exit 0
 fi
 
-log "시도 중..."
+# 지정한 fault domain 으로 1회 launch 시도
+launch_instance() {
+  local fd="$1"
+  oci compute instance launch \
+    --availability-domain "$AD" \
+    --compartment-id "$COMPARTMENT_ID" \
+    --fault-domain "$fd" \
+    --shape "$SHAPE" \
+    --shape-config "{\"ocpus\": $OCPUS, \"memoryInGBs\": $MEM_GB}" \
+    --image-id "$IMAGE_ID" \
+    --subnet-id "$SUBNET_ID" \
+    --display-name "$DISPLAY_NAME" \
+    --assign-public-ip true \
+    --ssh-authorized-keys-file "$SSH_KEY_FILE" \
+    2>&1
+}
 
-RESULT=$(oci compute instance launch \
-  --availability-domain "$AD" \
-  --compartment-id "$COMPARTMENT_ID" \
-  --shape "$SHAPE" \
-  --shape-config "{\"ocpus\": $OCPUS, \"memoryInGBs\": $MEM_GB}" \
-  --image-id "$IMAGE_ID" \
-  --subnet-id "$SUBNET_ID" \
-  --display-name "$DISPLAY_NAME" \
-  --assign-public-ip true \
-  --ssh-authorized-keys-file "$SSH_KEY_FILE" \
-  2>&1)
+# 모든 fault domain 을 순회 시도 (용량은 FD별로 다를 수 있어 조기 확보 확률↑)
+launched=0
+saw_429=0
+saw_capacity=0
+unexpected=""
 
-if echo "$RESULT" | grep -q '"id"'; then
-  INSTANCE_ID=$(echo "$RESULT" | sed -n 's/^[[:space:]]*"id":[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
-  log "🎉 성공! 인스턴스 생성됨"
-  echo "$RESULT" | grep '"id"' | head -1 | tee -a "$LOG_FILE"
-  touch "$LOCK_FILE"
-  reset_backoff
-  log "lock 생성. 더 이상 시도 안 함."
-  send_success_email "${INSTANCE_ID:-확인 불가}"
-elif echo "$RESULT" | grep -qi "Out of capacity\|Out of host capacity"; then
-  reset_backoff
-  log "용량 부족. 다음 주기에 재시도."
-elif echo "$RESULT" | grep -qi "TooManyRequests"; then
-  log "요청 과다(429). 백오프 진입."
+for FD in "${FAULT_DOMAINS[@]}"; do
+  log "시도 중... ($FD)"
+  RESULT=$(launch_instance "$FD")
+
+  if echo "$RESULT" | grep -q '"id"'; then
+    INSTANCE_ID=$(echo "$RESULT" | sed -n 's/^[[:space:]]*"id":[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+    log "🎉 성공! 인스턴스 생성됨 ($FD)"
+    echo "$RESULT" | grep '"id"' | head -1 | tee -a "$LOG_FILE"
+    touch "$LOCK_FILE"
+    reset_backoff
+    log "lock 생성. 더 이상 시도 안 함."
+    send_success_email "${INSTANCE_ID:-확인 불가}"
+    launched=1
+    break
+
+  elif echo "$RESULT" | grep -qi "TooManyRequests\|Too many requests"; then
+    # 429는 사용자(테넌시) 단위 쓰로틀 → 이번 주기 나머지 FD는 무의미, 중단하고 백오프
+    saw_429=1
+    log "요청 과다(429) ($FD). 이번 주기 나머지 FD 건너뜀."
+    break
+
+  elif echo "$RESULT" | grep -qi "Out of capacity\|Out of host capacity"; then
+    saw_capacity=1
+    log "용량 부족 ($FD). 다음 FD 시도."
+    sleep 3
+    continue
+
+  elif echo "$RESULT" | grep -qi "LimitExceeded\|QuotaExceeded"; then
+    log "⚠️ 한도 초과. 확인 필요. 중단."
+    echo "$RESULT" | tee -a "$LOG_FILE"
+    touch "$LOCK_FILE"
+    exit 0
+
+  else
+    unexpected="$RESULT"
+    log "예상 밖 응답 ($FD). 다음 FD 시도."
+    sleep 3
+    continue
+  fi
+done
+
+# 이번 주기 결과에 따른 백오프 처리
+if [ "$launched" -eq 1 ]; then
+  :   # 성공 처리 완료
+elif [ "$saw_429" -eq 1 ]; then
   enter_backoff
-elif echo "$RESULT" | grep -qi "LimitExceeded\|QuotaExceeded"; then
-  log "⚠️ 한도 초과. 확인 필요. 중단."
-  echo "$RESULT" | tee -a "$LOG_FILE"
-  touch "$LOCK_FILE"
 else
   reset_backoff
-  log "예상 밖 응답(다음 주기에 재시도):"
-  echo "$RESULT" | tee -a "$LOG_FILE"
+  [ "$saw_capacity" -eq 1 ] && log "모든 FD 용량 부족. 다음 주기에 재시도."
+  if [ -n "$unexpected" ]; then
+    log "예상 밖 응답 상세:"
+    echo "$unexpected" | tee -a "$LOG_FILE"
+  fi
 fi
 
 exit 0
