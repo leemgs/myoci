@@ -19,6 +19,15 @@ Oracle Cloud Infrastructure(OCI)의 Always Free **ARM(VM.Standard.A1.Flex,
 - `data/add-arm-instance.log.mail.log` — 성공 이메일 전송 시 SMTP 상세 로그
 - `../docs/arm-launch-status.json` — 웹에 공개하는 최근 ARM 생성 시도 결과
 
+이전 버전이 `script/` 바로 아래에 생성한 `*.log`, `*.state` 파일은 더 이상
+사용하지 않습니다. 최신 `add-arm-instance.sh`는 실행할 때 이 중복 파일을
+자동으로 제거하고 `script/data/`의 파일만 사용합니다. 배포 직후 직접 정리하려면:
+
+```bash
+find /var/www/html/myoci/script -maxdepth 1 -type f \
+  \( -name '*.log' -o -name '*.state' \) -delete
+```
+
 ## 동작 방식
 
 한 번 실행하면 아래 순서로 진행하고 종료합니다.

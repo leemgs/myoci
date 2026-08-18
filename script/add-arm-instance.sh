@@ -38,6 +38,25 @@ mkdir -p "$DATA_DIR" || {
   exit 1
 }
 
+# 예전 버전이 script/ 바로 아래에 만들던 log/state 파일은 더 이상 사용하지 않는다.
+# 현재 runtime 원본은 모두 script/data/에 있으므로 중복 파일을 자동 정리한다.
+cleanup_legacy_runtime_files() {
+  local legacy_file
+  local legacy_files=("$SCRIPT_DIR"/*.log "$SCRIPT_DIR"/*.state)
+
+  for legacy_file in "${legacy_files[@]}"; do
+    if [ -e "$legacy_file" ] || [ -L "$legacy_file" ]; then
+      if rm -f -- "$legacy_file"; then
+        echo "이전 runtime 파일 제거: $legacy_file"
+      else
+        echo "경고: 이전 runtime 파일을 제거할 수 없습니다: $legacy_file" >&2
+      fi
+    fi
+  done
+}
+
+cleanup_legacy_runtime_files
+
 # 화면+로그 동시 출력 함수
 log() { echo "$(date) - $*" | tee -a "$LOG_FILE"; }
 

@@ -1,5 +1,7 @@
 .env
 *.log
+*.state
+*.done
 docs/instance-info.json
 docs/arm-launch-status.json
 script/data/
