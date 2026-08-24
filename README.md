@@ -123,7 +123,9 @@ rm -f script/data/add-arm-instance.state
 `Oracle Instance Status` 메뉴에는 현재 OCI 인스턴스 목록과 함께 최근 ARM 생성
 시도의 상태(시도 중, 용량 부족, 429 백오프, 실패, 성공), Fault Domain, 다음
 재시도 시각 및 오류 요약이 표시됩니다. 이 정보는 `add-arm-instance.sh`가
-`docs/arm-launch-status.json`에 원자적으로 기록합니다.
+`docs/arm-launch-status.json`에 원자적으로 기록합니다. 현황 화면의 바로가기를
+통해 ARM 서버(`http://myoci-arm.mooo.com`)와 X86 서버(`http://myoci.mooo.com`)에
+접속할 수 있습니다.
 
 각 화면은 아래 주소로 직접 접속할 수 있습니다. 메뉴를 클릭할 때는 페이지를
 다시 내려받지 않고 화면과 주소만 전환하며, 직접 URL로 접속하면 해당 화면으로

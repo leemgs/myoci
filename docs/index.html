@@ -199,6 +199,33 @@
       font-size: 13px;
     }
 
+    .instance-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .instance-link {
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 11px;
+      color: #245b85;
+      background: #ffffff;
+      border: 1px solid #bfd1df;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .instance-link:hover,
+    .instance-link:focus-visible {
+      color: #ffffff;
+      background: #245b85;
+      border-color: #245b85;
+    }
+
     .refresh-button {
       padding: 9px 14px;
       color: #ffffff;
@@ -686,6 +713,10 @@
         <div>
           <h2 id="instance-heading">Oracle 인스턴스 현황</h2>
           <p class="instance-meta" id="instance-meta">OCI에서 최신 정보를 불러오는 중입니다.</p>
+          <nav class="instance-links" aria-label="인스턴스 바로가기">
+            <a class="instance-link" href="http://myoci-arm.mooo.com">ARM 접속</a>
+            <a class="instance-link" href="http://myoci.mooo.com">X86 접속</a>
+          </nav>
         </div>
         <button class="refresh-button" id="refresh-instances" type="button">새로고침</button>
       </div>
